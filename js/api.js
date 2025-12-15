@@ -41,11 +41,21 @@ const API = (() => {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
-                const result = await response.json();
+                const responseText = await response.text();
+                let result;
+                try {
+                    result = responseText ? JSON.parse(responseText) : null;
+                } catch (parseError) {
+                    throw new Error('Invalid JSON response from server');
+                }
+
+                if (!result || typeof result !== 'object') {
+                    throw new Error('Empty or invalid response from server');
+                }
 
                 // Handle auth errors
                 if (result.code === 'AUTH_ERROR') {
-                    Auth.handleAuthError();
+                    Auth.handleAuthError(result);
                     throw new Error(result.error || 'Authentication failed');
                 }
 

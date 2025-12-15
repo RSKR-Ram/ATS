@@ -350,7 +350,8 @@ const Auth = (() => {
      * Handle authentication errors from API
      */
     const handleAuthError = (response) => {
-        if (response.code === 'TOKEN_EXPIRED' || response.code === 'AUTH_ERROR') {
+        const code = response && typeof response === 'object' ? response.code : null;
+        if (code === 'TOKEN_EXPIRED' || code === 'AUTH_ERROR') {
             Utils.toast('Your session has expired. Please login again.', 'warning');
             clearSession();
             Router.navigate('login');
