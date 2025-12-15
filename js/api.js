@@ -1,322 +1,448 @@
 /**
  * ============================================
- * HRMS/ATS SYSTEM - API MODULE
- * Fetch wrapper for backend communication
+ * HRMS/ATS SYSTEM - AUTH MODULE
+ * Google OAuth & Session Management
  * ============================================
  */
 
-const API = (() => {
-    // Private variables
-    let baseUrl = CONFIG.API.BASE_URL;
-    let requestQueue = [];
-    let isProcessing = false;
+const Auth = (() => {
+    // Private state
+    let currentUser = null;
+    let isInitialized = false;
+    let googleAuth = null;
 
     /**
-     * Get authentication token from session
+     * Initialize Google OAuth
      */
-    const getToken = () => {
-        return localStorage.getItem(CONFIG.AUTH.TOKEN_KEY) || null;
-    };
-
-    /**
-     * Build request payload
-     */
-    const buildPayload = (action, data = {}) => {
-        return {
-            action: action,
-            token: getToken(),
-            data: data,
-            timestamp: new Date().toISOString()
-        };
-    };
-
-    /**
-     * Handle API errors
-     */
-    const handleError = (error, action) => {
-        console.error(`API Error [${action}]:`, error);
-        
-        // Check for specific error types
-        if (error.name === 'AbortError') {
-            return { success: false, error: 'Request timed out', code: 'TIMEOUT' };
-        }
-        
-        if (error.message === 'Failed to fetch') {
-            return { success: false, error: 'Network error. Please check your connection.', code: 'NETWORK_ERROR' };
-        }
-        
-        return { success: false, error: error.message || 'Unknown error occurred', code: 'UNKNOWN_ERROR' };
-    };
-
-    /**
-     * Main request function with retry logic
-     */
-    const request = async (action, data = {}, options = {}) => {
-        const { 
-            retryAttempts = CONFIG.API.RETRY_ATTEMPTS,
-            timeout = CONFIG.API.TIMEOUT,
-            showLoader = true
-        } = options;
-
-        // Show loading state
-        if (showLoader) {
-            Utils.showLoader();
-        }
-
-        let lastError;
-        
-        for (let attempt = 1; attempt <= retryAttempts; attempt++) {
-            try {
-                // Create abort controller for timeout
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-                const payload = buildPayload(action, data);
-                
-                console.log(`API Request [${action}] Attempt ${attempt}:`, payload);
-
-                const response = await fetch(baseUrl, {
-                    method: 'POST',
-                    mode: 'cors',
-                    cache: 'no-cache',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload),
-                    signal: controller.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                // Check if response is ok
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const result = await response.json();
-                
-                console.log(`API Response [${action}]:`, result);
-
-                // Hide loading state
-                if (showLoader) {
-                    Utils.hideLoader();
-                }
-
-                // Check for authentication errors
-                if (result.code === 'AUTH_ERROR' || result.code === 'TOKEN_EXPIRED') {
-                    Auth.handleAuthError(result);
-                    return result;
-                }
-
-                return result;
-
-            } catch (error) {
-                lastError = error;
-                console.warn(`API Request failed (attempt ${attempt}/${retryAttempts}):`, error.message);
-                
-                // Wait before retrying
-                if (attempt < retryAttempts) {
-                    await Utils.sleep(CONFIG.API.RETRY_DELAY * attempt);
-                }
+    const initGoogleAuth = () => {
+        return new Promise((resolve, reject) => {
+            // Load Google Identity Services
+            if (typeof google === 'undefined') {
+                // Load script dynamically if not loaded
+                const script = document.createElement('script');
+                script.src = 'https://accounts.google.com/gsi/client';
+                script.async = true;
+                script.defer = true;
+                script.onload = () => {
+                    setupGoogleAuth();
+                    resolve();
+                };
+                script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
+                document.head.appendChild(script);
+            } else {
+                setupGoogleAuth();
+                resolve();
             }
-        }
+        });
+    };
 
-        // Hide loading state
-        if (showLoader) {
+    /**
+     * Setup Google Auth configuration
+     */
+    const setupGoogleAuth = () => {
+        google.accounts.id.initialize({
+            client_id: CONFIG.AUTH.CLIENT_ID,
+            callback: handleGoogleCallback,
+            auto_select: false,
+            cancel_on_tap_outside: true
+        });
+
+        isInitialized = true;
+    };
+
+    /**
+     * Handle Google OAuth callback
+     */
+    const handleGoogleCallback = async (response) => {
+        try {
+            Utils.showLoader('Authenticating...');
+            
+            // Send token to backend for verification
+            const result = await API.auth.login(response.credential);
+            
+            if (result.success) {
+                // Store session data
+                localStorage.setItem(CONFIG.AUTH.TOKEN_KEY, result.token);
+                localStorage.setItem(CONFIG.AUTH.SESSION_KEY, JSON.stringify({
+                    user: result.user,
+                    expiresAt: Date.now() + CONFIG.AUTH.SESSION_DURATION
+                }));
+                
+                currentUser = result.user;
+                
+                // Update state
+                State.setUser(result.user);
+                
+                // Redirect to dashboard
+                Utils.toast('Login successful! Welcome back.', 'success');
+                Router.navigate('dashboard');
+            } else {
+                Utils.toast(result.error || 'Login failed. Please try again.', 'error');
+            }
+        } catch (error) {
+            console.error('Auth error:', error);
+            Utils.toast('Authentication failed. Please try again.', 'error');
+        } finally {
             Utils.hideLoader();
         }
-
-        return handleError(lastError, action);
     };
 
     /**
-     * Queue request for batch processing
+     * Render Google Sign-In button
      */
-    const queueRequest = (action, data, callback) => {
-        requestQueue.push({ action, data, callback });
-        
-        if (!isProcessing) {
-            processQueue();
-        }
-    };
-
-    /**
-     * Process queued requests
-     */
-    const processQueue = async () => {
-        if (requestQueue.length === 0) {
-            isProcessing = false;
+    const renderGoogleButton = (containerId) => {
+        if (!isInitialized) {
+            console.error('Google Auth not initialized');
             return;
         }
 
-        isProcessing = true;
-        const { action, data, callback } = requestQueue.shift();
-        
-        const result = await request(action, data);
-        
-        if (callback && typeof callback === 'function') {
-            callback(result);
+        google.accounts.id.renderButton(
+            document.getElementById(containerId),
+            {
+                theme: 'outline',
+                size: 'large',
+                type: 'standard',
+                text: 'signin_with',
+                shape: 'rectangular',
+                logo_alignment: 'left',
+                width: 280
+            }
+        );
+    };
+
+    /**
+     * Show Google One Tap prompt
+     */
+    const showOneTap = () => {
+        if (isInitialized) {
+            google.accounts.id.prompt((notification) => {
+                if (notification.isNotDisplayed()) {
+                    console.log('One Tap not displayed:', notification.getNotDisplayedReason());
+                }
+                if (notification.isSkippedMoment()) {
+                    console.log('One Tap skipped:', notification.getSkippedReason());
+                }
+            });
         }
-
-        // Process next in queue
-        setTimeout(processQueue, 100);
     };
 
-    // ==========================================
-    // PUBLIC API METHODS
-    // ==========================================
-
-    // Auth Actions
-    const auth = {
-        login: (token) => request('AUTH_LOGIN', { token }),
-        logout: () => request('AUTH_LOGOUT'),
-        validateToken: () => request('AUTH_VALIDATE'),
-        getUserPermissions: () => request('GET_USER_PERMISSIONS')
+    /**
+     * Check if user is authenticated
+     */
+    const isAuthenticated = () => {
+        const session = getSession();
+        return session !== null && session.expiresAt > Date.now();
     };
 
-    // Requirement Actions
-    const requirements = {
-        getAll: (filters = {}) => request('GET_REQUIREMENTS', filters),
-        getById: (id) => request('GET_REQUIREMENT', { requirementId: id }),
-        create: (data) => request('RAISE_REQUIREMENT', data),
-        update: (id, data) => request('UPDATE_REQUIREMENT', { requirementId: id, ...data }),
-        approve: (id, remark = '') => request('APPROVE_REQUIREMENT', { requirementId: id, remark }),
-        sendBack: (id, remark) => request('SEND_BACK_REQUIREMENT', { requirementId: id, remark }),
-        close: (id, reason) => request('CLOSE_REQUIREMENT', { requirementId: id, reason })
+    /**
+     * Get current session
+     */
+    const getSession = () => {
+        try {
+            const sessionData = localStorage.getItem(CONFIG.AUTH.SESSION_KEY);
+            if (!sessionData) return null;
+            
+            const session = JSON.parse(sessionData);
+            
+            // Check expiration
+            if (session.expiresAt && session.expiresAt > Date.now()) {
+                return session;
+            }
+            
+            // Session expired, clear it
+            clearSession();
+            return null;
+        } catch (error) {
+            console.error('Error parsing session:', error);
+            clearSession();
+            return null;
+        }
     };
 
-    // Job Template Actions
-    const templates = {
-        getAll: () => request('GET_JOB_TEMPLATES'),
-        getById: (id) => request('GET_JOB_TEMPLATE', { templateId: id }),
-        create: (data) => request('CREATE_JOB_TEMPLATE', data),
-        update: (id, data) => request('UPDATE_JOB_TEMPLATE', { templateId: id, ...data })
+    /**
+     * Get current user
+     */
+    const getCurrentUser = () => {
+        if (currentUser) return currentUser;
+        
+        const session = getSession();
+        if (session && session.user) {
+            currentUser = session.user;
+            return currentUser;
+        }
+        
+        return null;
     };
 
-    // Job Posting Actions
-    const jobPostings = {
-        getAll: (filters = {}) => request('GET_JOB_POSTINGS', filters),
-        getById: (id) => request('GET_JOB_POSTING', { postingId: id }),
-        create: (requirementId, data) => request('CREATE_JOB_POSTING', { requirementId, ...data }),
-        update: (id, data) => request('UPDATE_JOB_POSTING', { postingId: id, ...data }),
-        markPosted: (id, portal, screenshot) => request('MARK_JOB_POSTED', { postingId: id, portal, screenshot }),
-        getJD: (id) => request('GET_JOB_DESCRIPTION', { postingId: id })
+    /**
+     * Get user role
+     */
+    const getUserRole = () => {
+        const user = getCurrentUser();
+        return user ? user.role : null;
     };
 
-    // Candidate Actions
-    const candidates = {
-        getAll: (filters = {}) => request('GET_CANDIDATES', filters),
-        getById: (id) => request('GET_CANDIDATE', { candidateId: id }),
-        add: (data) => request('ADD_CANDIDATE', data),
-        bulkAdd: (candidates) => request('BULK_ADD_CANDIDATES', { candidates }),
-        update: (id, data) => request('UPDATE_CANDIDATE', { candidateId: id, ...data }),
-        shortlist: (id, decision, remark = '') => request('SHORTLIST_DECISION', { candidateId: id, decision, remark }),
-        getHistory: (id) => request('GET_CANDIDATE_HISTORY', { candidateId: id }),
-        getWaitlist: (jobRole) => request('GET_WAITLIST', { jobRole })
+    /**
+     * Check if user has permission
+     */
+    const hasPermission = (permission) => {
+        const user = getCurrentUser();
+        if (!user || !user.permissions) return false;
+        return user.permissions.includes(permission);
     };
 
-    // Call Screening Actions
-    const calls = {
-        log: (candidateId, status, data = {}) => request('CALL_SCREENING', { candidateId, status, ...data }),
-        getLogs: (candidateId) => request('GET_CALL_LOGS', { candidateId }),
-        getAllLogs: (filters = {}) => request('GET_ALL_CALL_LOGS', filters)
+    /**
+     * Check if user has any of the given permissions
+     */
+    const hasAnyPermission = (permissions) => {
+        return permissions.some(p => hasPermission(p));
     };
 
-    // Interview Actions
-    const interviews = {
-        getAll: (filters = {}) => request('GET_INTERVIEWS', filters),
-        schedule: (candidateId, data) => request('SCHEDULE_INTERVIEW', { candidateId, ...data }),
-        reschedule: (interviewId, data) => request('RESCHEDULE_INTERVIEW', { interviewId, ...data }),
-        markAttendance: (interviewId, appeared) => request('MARK_INTERVIEW_ATTENDANCE', { interviewId, appeared }),
-        submitPreFeedback: (candidateId, data) => request('PRE_INTERVIEW_FEEDBACK', { candidateId, ...data }),
-        submitFinalFeedback: (interviewId, data) => request('SUBMIT_INTERVIEW_FEEDBACK', { interviewId, ...data }),
-        ownerDecision: (candidateId, decision, remark = '') => request('OWNER_INTERVIEW_DECISION', { candidateId, decision, remark })
+    /**
+     * Check if user has all of the given permissions
+     */
+    const hasAllPermissions = (permissions) => {
+        return permissions.every(p => hasPermission(p));
     };
 
-    // Test Actions
-    const tests = {
-        generateLink: (candidateId) => request('GENERATE_TEST_LINK', { candidateId }),
-        getQuestions: (testToken) => request('GET_TEST_QUESTIONS', { testToken }, { timeout: 60000 }),
-        submitAnswer: (testToken, questionId, answer) => request('SUBMIT_TEST_ANSWER', { testToken, questionId, answer }),
-        submitTest: (testToken) => request('SUBMIT_TEST', { testToken }),
-        getResults: (candidateId) => request('GET_TEST_RESULTS', { candidateId }),
-        editMarks: (candidateId, testType, newMarks, reason) => request('EDIT_TEST_MARKS', { candidateId, testType, newMarks, reason })
+    /**
+     * Check if user has role
+     */
+    const hasRole = (role) => {
+        const userRole = getUserRole();
+        return userRole === role;
     };
 
-    // Admin Actions
-    const admin = {
-        getPendingReview: () => request('GET_ADMIN_PENDING_REVIEW'),
-        decision: (candidateId, decision, remark = '') => request('ADMIN_DECISION', { candidateId, decision, remark }),
-        editMarks: (candidateId, type, data, reason) => request('ADMIN_EDIT_MARKS', { candidateId, type, ...data, reason }),
-        revert: (candidateId, toStage, reason) => request('ADMIN_REVERT', { candidateId, toStage, reason }),
-        getAuditLog: (filters = {}) => request('GET_AUDIT_LOG', filters),
-        getRejectionLog: (filters = {}) => request('GET_REJECTION_LOG', filters),
-        revertRejection: (rejectionId, reason) => request('REVERT_REJECTION', { rejectionId, reason }),
-        getSystemStats: () => request('GET_SYSTEM_STATS'),
-        updateSettings: (settings) => request('UPDATE_SETTINGS', settings)
+    /**
+     * Check if user has any of the given roles
+     */
+    const hasAnyRole = (roles) => {
+        const userRole = getUserRole();
+        return roles.includes(userRole);
     };
 
-    // Final Interview & Selection Actions
-    const finalInterview = {
-        schedule: (candidateId, data) => request('SCHEDULE_FINAL_INTERVIEW', { candidateId, ...data }),
-        ownerDecision: (candidateId, decision, remark = '') => request('FINAL_INTERVIEW_DECISION', { candidateId, decision, remark })
+    /**
+     * Validate token with backend
+     */
+    const validateToken = async () => {
+        if (!isAuthenticated()) return false;
+        
+        try {
+            const result = await API.auth.validateToken();
+            
+            if (!result.success) {
+                clearSession();
+                return false;
+            }
+            
+            // Update user data if changed
+            if (result.user) {
+                currentUser = result.user;
+                updateSession({ user: result.user });
+                State.setUser(result.user);
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Token validation error:', error);
+            return false;
+        }
     };
 
-    // Onboarding Actions
-    const onboarding = {
-        initiate: (candidateId) => request('INITIATE_ONBOARDING', { candidateId }),
-        uploadDocument: (candidateId, docType, fileData) => request('UPLOAD_DOCUMENT', { candidateId, docType, fileData }),
-        verifyDocument: (candidateId, docType, verified, remark = '') => request('VERIFY_DOCUMENT', { candidateId, docType, verified, remark }),
-        setJoiningDate: (candidateId, joiningDate) => request('SET_JOINING_DATE', { candidateId, joiningDate }),
-        confirmJoining: (candidateId) => request('CONFIRM_JOINING', { candidateId }),
-        getOnboardingStatus: (candidateId) => request('GET_ONBOARDING_STATUS', { candidateId }),
-        getProbationList: () => request('GET_PROBATION_LIST')
+    /**
+     * Update session data
+     */
+    const updateSession = (updates) => {
+        const session = getSession();
+        if (session) {
+            const updated = { ...session, ...updates };
+            localStorage.setItem(CONFIG.AUTH.SESSION_KEY, JSON.stringify(updated));
+        }
     };
 
-    // User Management Actions
-    const users = {
-        getAll: () => request('GET_USERS'),
-        create: (data) => request('CREATE_USER', data),
-        update: (userId, data) => request('UPDATE_USER', { userId, ...data }),
-        updatePermissions: (userId, permissions) => request('UPDATE_USER_PERMISSIONS', { userId, permissions }),
-        deactivate: (userId) => request('DEACTIVATE_USER', { userId })
+    /**
+     * Refresh session
+     */
+    const refreshSession = () => {
+        const session = getSession();
+        if (session) {
+            session.expiresAt = Date.now() + CONFIG.AUTH.SESSION_DURATION;
+            localStorage.setItem(CONFIG.AUTH.SESSION_KEY, JSON.stringify(session));
+        }
     };
 
-    // Dashboard Actions
-    const dashboard = {
-        getStats: () => request('GET_DASHBOARD_STATS'),
-        getRecentActivity: (limit = 10) => request('GET_RECENT_ACTIVITY', { limit }),
-        getPendingActions: () => request('GET_PENDING_ACTIONS'),
-        getChartData: (chartType, dateRange) => request('GET_CHART_DATA', { chartType, dateRange })
+    /**
+     * Clear session
+     */
+    const clearSession = () => {
+        localStorage.removeItem(CONFIG.AUTH.TOKEN_KEY);
+        localStorage.removeItem(CONFIG.AUTH.SESSION_KEY);
+        currentUser = null;
     };
 
-    // Set base URL (for initialization)
-    const setBaseUrl = (url) => {
-        baseUrl = url;
+    /**
+     * Logout
+     */
+    const logout = async () => {
+        try {
+            Utils.showLoader('Logging out...');
+            
+            // Notify backend
+            await API.auth.logout();
+            
+            // Clear local session
+            clearSession();
+            
+            // Clear state
+            State.clear();
+            
+            // Revoke Google session
+            if (isInitialized) {
+                google.accounts.id.disableAutoSelect();
+            }
+            
+            Utils.toast('Logged out successfully', 'success');
+            
+            // Redirect to login
+            Router.navigate('login');
+        } catch (error) {
+            console.error('Logout error:', error);
+            // Force logout even if API fails
+            clearSession();
+            State.clear();
+            Router.navigate('login');
+        } finally {
+            Utils.hideLoader();
+        }
+    };
+
+    /**
+     * Handle authentication errors from API
+     */
+    const handleAuthError = (response) => {
+        if (response.code === 'TOKEN_EXPIRED' || response.code === 'AUTH_ERROR') {
+            Utils.toast('Your session has expired. Please login again.', 'warning');
+            clearSession();
+            Router.navigate('login');
+        }
+    };
+
+    /**
+     * Guard route - check if user can access
+     */
+    const guardRoute = (requiredPermissions = [], requiredRoles = []) => {
+        // Check authentication
+        if (!isAuthenticated()) {
+            Router.navigate('login');
+            return false;
+        }
+        
+        // Check roles if specified
+        if (requiredRoles.length > 0 && !hasAnyRole(requiredRoles)) {
+            Utils.toast('You do not have access to this page.', 'error');
+            Router.navigate('dashboard');
+            return false;
+        }
+        
+        // Check permissions if specified
+        if (requiredPermissions.length > 0 && !hasAnyPermission(requiredPermissions)) {
+            Utils.toast('You do not have permission to access this page.', 'error');
+            Router.navigate('dashboard');
+            return false;
+        }
+        
+        return true;
+    };
+
+    /**
+     * Login with Google OAuth
+     */
+    const login = async () => {
+        if (!isInitialized) {
+            await initGoogleAuth();
+        }
+        
+        return new Promise((resolve, reject) => {
+            // Trigger Google Sign-In
+            google.accounts.id.prompt((notification) => {
+                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                    reject(new Error('Google Sign-In was cancelled or not displayed'));
+                }
+            });
+            
+            // The actual authentication will be handled by handleGoogleCallback
+            // which gets triggered automatically when user signs in
+        });
+    };
+
+    /**
+     * Handle OAuth redirect (for compatibility)
+     */
+    const handleOAuthRedirect = async () => {
+        // Check URL parameters for OAuth response
+        const params = new URLSearchParams(window.location.search);
+        
+        if (params.has('code') || params.has('error')) {
+            // Handle OAuth code/error if present
+            if (params.has('error')) {
+                throw new Error(params.get('error_description') || 'OAuth error');
+            }
+            
+            // Clear URL parameters
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        
+        return Promise.resolve();
+    };
+
+    /**
+     * Initialize auth module
+     */
+    const init = async () => {
+        try {
+            await initGoogleAuth();
+            
+            // Check for existing session
+            if (isAuthenticated()) {
+                const session = getSession();
+                currentUser = session.user;
+                State.setUser(currentUser);
+                
+                // Validate token in background
+                validateToken();
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Auth initialization error:', error);
+            return false;
+        }
     };
 
     // Public interface
     return {
-        request,
-        queueRequest,
-        setBaseUrl,
-        auth,
-        requirements,
-        templates,
-        jobPostings,
-        candidates,
-        calls,
-        interviews,
-        tests,
-        admin,
-        finalInterview,
-        onboarding,
-        users,
-        dashboard
+        init,
+        login,
+        handleOAuthRedirect,
+        renderGoogleButton,
+        showOneTap,
+        isAuthenticated,
+        getCurrentUser,
+        getUserRole,
+        hasPermission,
+        hasAnyPermission,
+        hasAllPermissions,
+        hasRole,
+        hasAnyRole,
+        validateToken,
+        refreshSession,
+        logout,
+        handleAuthError,
+        guardRoute
     };
 })();
 
 // Export for module usage
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = API;
+    module.exports = Auth;
 }
