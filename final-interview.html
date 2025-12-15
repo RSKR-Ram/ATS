@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Interview - HRMS / ATS System</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Include Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <!-- Sidebar content same as dashboard.html -->
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="page-header">
+                <div class="header-left">
+                    <h1>Final Interview Queue</h1>
+                    <p class="text-muted">Candidates who passed all tests - Ready for final decision</p>
+                </div>
+                <div class="header-right">
+                    <button class="btn btn-secondary" id="final-interview-filter-btn">
+                        <i class="icon-filter"></i> Filter
+                    </button>
+                    <button class="btn btn-primary" id="final-interview-refresh-btn">
+                        <i class="icon-refresh-cw"></i> Refresh
+                    </button>
+                </div>
+            </header>
+
+            <!-- Final Interview List -->
+            <div class="content-section">
+                <div id="final-interview-list" class="interview-list">
+                    <div class="loading">Loading final interview queue...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Loader -->
+    <div class="loader-overlay" id="loader-overlay">
+        <div class="spinner"></div>
+        <p id="loader-text">Loading...</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/ui-router.js"></script>
+    <script src="js/modules/owner.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!Auth.isAuthenticated()) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            try {
+                await Auth.loadUserData();
+                UIRouter.init();
+                await OwnerModule.initFinalInterviewQueue();
+            } catch (error) {
+                console.error('Page initialization error:', error);
+                Utils.showToast('Failed to load page', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

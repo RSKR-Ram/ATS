@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Setup - HRMS / ATS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .setup-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .setup-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .setup-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #666;
+        }
+
+        .setup-steps {
+            margin-bottom: 30px;
+        }
+
+        .step {
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .step.completed {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .step.error {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .step.active {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .step.completed .step-number {
+            background: #10b981;
+        }
+
+        .step.error .step-number {
+            background: #ef4444;
+        }
+
+        .step-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .step-description {
+            color: #666;
+            margin-left: 44px;
+            font-size: 14px;
+        }
+
+        .step-status {
+            margin-left: 44px;
+            margin-top: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .step-status.show {
+            display: block;
+        }
+
+        .step-status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .step-status.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .step-status.loading {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .config-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .config-section h3 {
+            margin-bottom: 16px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            margin-top: 30px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <div class="setup-header">
+            <div class="setup-icon">⚙️</div>
+            <h1>System Setup</h1>
+            <p class="subtitle">Initialize your HRMS/ATS system</p>
+        </div>
+
+        <div class="config-section">
+            <h3>Configuration</h3>
+            <div class="form-group">
+                <label>Google Spreadsheet ID *</label>
+                <input type="text" id="spreadsheet-id" placeholder="Enter your spreadsheet ID from URL">
+            </div>
+            <div class="alert alert-info">
+                <strong>Note:</strong> Get the Spreadsheet ID from your Google Sheets URL: 
+                <code>https://docs.google.com/spreadsheets/d/<strong>SPREADSHEET_ID</strong>/edit</code>
+            </div>
+        </div>
+
+        <div class="setup-steps">
+            <div class="step" id="step-1">
+                <div class="step-header">
+                    <div class="step-number">1</div>
+                    <div class="step-title">Configure Spreadsheet</div>
+                </div>
+                <div class="step-description">Enter your Google Spreadsheet ID</div>
+                <div class="step-status" id="status-1"></div>
+            </div>
+
+            <div class="step" id="step-2">
+                <div class="step-header">
+                    <div class="step-number">2</div>
+                    <div class="step-title">Initialize Database</div>
+                </div>
+                <div class="step-description">Create all required sheets with headers</div>
+                <div class="step-status" id="status-2"></div>
+            </div>
+
+            <div class="step" id="step-3">
+                <div class="step-header">
+                    <div class="step-number">3</div>
+                    <div class="step-title">Setup Default Data</div>
+                </div>
+                <div class="step-description">Add default permissions, admin user, and job templates</div>
+                <div class="step-status" id="status-3"></div>
+            </div>
+        </div>
+
+        <button class="btn" id="setup-btn" onclick="startSetup()">Start Setup</button>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL'; // Update this after deployment
+
+        let currentStep = 1;
+
+        function updateProgress(percent) {
+            document.getElementById('progress').style.width = percent + '%';
+        }
+
+        function setStepStatus(step, status, message) {
+            const stepEl = document.getElementById(`step-${step}`);
+            const statusEl = document.getElementById(`status-${step}`);
+
+            stepEl.className = 'step ' + status;
+            statusEl.className = 'step-status show ' + status;
+
+            if (status === 'loading') {
+                statusEl.innerHTML = '<div class="spinner"></div>' + message;
+            } else {
+                statusEl.textContent = message;
+            }
+        }
+
+        async function apiCall(action, data = {}) {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: action,
+                    data: data,
+                    timestamp: new Date().toISOString()
+                })
+            });
+
+            return await response.json();
+        }
+
+        async function startSetup() {
+            const btn = document.getElementById('setup-btn');
+            const spreadsheetId = document.getElementById('spreadsheet-id').value.trim();
+
+            // Step 1: Validate input
+            setStepStatus(1, 'active', 'Validating...');
+            
+            if (!spreadsheetId) {
+                setStepStatus(1, 'error', 'Spreadsheet ID is required!');
+                return;
+            }
+
+            setStepStatus(1, 'completed', 'Spreadsheet ID configured ✓');
+            updateProgress(33);
+
+            btn.disabled = true;
+            btn.textContent = 'Setting up...';
+
+            try {
+                // Step 2: Initialize Sheets
+                setStepStatus(2, 'loading', 'Creating sheets and adding headers...');
+                
+                const initResult = await apiCall('INITIALIZE_SHEETS', { spreadsheetId });
+
+                if (initResult.success) {
+                    setStepStatus(2, 'completed', 
+                        `Database initialized! Created: ${initResult.created}, Existing: ${initResult.existing} ✓`);
+                    updateProgress(66);
+
+                    // Step 3: Setup Default Data
+                    setStepStatus(3, 'loading', 'Adding default data...');
+                    
+                    const dataResult = await apiCall('SETUP_DEFAULT_DATA');
+
+                    if (dataResult.success) {
+                        setStepStatus(3, 'completed', 'Default data added successfully ✓');
+                        updateProgress(100);
+
+                        btn.textContent = '✓ Setup Complete!';
+                        btn.style.background = '#10b981';
+
+                        setTimeout(() => {
+                            window.location.href = 'index.html';
+                        }, 2000);
+                    } else {
+                        throw new Error(dataResult.error || 'Failed to setup default data');
+                    }
+                } else {
+                    throw new Error(initResult.error || 'Failed to initialize sheets');
+                }
+            } catch (error) {
+                console.error('Setup error:', error);
+                const failedStep = currentStep === 1 ? 2 : 3;
+                setStepStatus(failedStep, 'error', error.message);
+                btn.disabled = false;
+                btn.textContent = 'Retry Setup';
+            }
+        }
+
+        // Check if API URL is configured
+        window.addEventListener('DOMContentLoaded', () => {
+            if (API_URL === 'YOUR_GOOGLE_APPS_SCRIPT_URL') {
+                const configSection = document.querySelector('.config-section');
+                configSection.innerHTML = `
+                    <div class="alert alert-info">
+                        <strong>⚠️ Configuration Required:</strong><br>
+                        Please update the <code>API_URL</code> in this HTML file with your deployed Google Apps Script URL.
+                    </div>
+                ` + configSection.innerHTML;
+            }
+        });
+    </script>
+</body>
+</html>

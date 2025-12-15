@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - HRMS / ATS System</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>HRMS / ATS</h1>
+                <button class="sidebar-toggle" id="sidebar-toggle">
+                    <i class="icon-menu"></i>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-item active">
+                    <i class="icon-home"></i>
+                    <span>Dashboard</span>
+                </a>
+
+                <div class="nav-section" data-role="EA,HR,ADMIN">
+                    <div class="nav-section-title">Recruitment</div>
+                    <a href="requirements.html" class="nav-item" data-permission="REQUIREMENT_VIEW">
+                        <i class="icon-file-text"></i>
+                        <span>Requirements</span>
+                    </a>
+                    <a href="candidates.html" class="nav-item" data-permission="CANDIDATE_VIEW">
+                        <i class="icon-users"></i>
+                        <span>Candidates</span>
+                    </a>
+                    <a href="interviews.html" class="nav-item" data-permission="INTERVIEW_VIEW">
+                        <i class="icon-calendar"></i>
+                        <span>Interviews</span>
+                    </a>
+                    <a href="tests.html" class="nav-item" data-permission="TEST_VIEW">
+                        <i class="icon-clipboard"></i>
+                        <span>Tests</span>
+                    </a>
+                </div>
+
+                <div class="nav-section" data-role="HR,ADMIN">
+                    <div class="nav-section-title">Onboarding</div>
+                    <a href="onboarding.html" class="nav-item" data-permission="ONBOARDING_VIEW">
+                        <i class="icon-user-check"></i>
+                        <span>Onboarding</span>
+                    </a>
+                    <a href="probation.html" class="nav-item" data-permission="PROBATION_VIEW">
+                        <i class="icon-trending-up"></i>
+                        <span>Probation</span>
+                    </a>
+                </div>
+
+                <div class="nav-section" data-role="ADMIN">
+                    <div class="nav-section-title">Admin</div>
+                    <a href="admin-queue.html" class="nav-item" data-permission="ADMIN_QUEUE">
+                        <i class="icon-alert-circle"></i>
+                        <span>Admin Queue</span>
+                    </a>
+                    <a href="rejection-log.html" class="nav-item" data-permission="REJECTION_LOG">
+                        <i class="icon-x-circle"></i>
+                        <span>Rejection Log</span>
+                    </a>
+                    <a href="audit-log.html" class="nav-item" data-permission="AUDIT_LOG">
+                        <i class="icon-list"></i>
+                        <span>Audit Log</span>
+                    </a>
+                    <a href="settings.html" class="nav-item" data-permission="SETTINGS">
+                        <i class="icon-settings"></i>
+                        <span>Settings</span>
+                    </a>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-info" id="user-info">
+                    <div class="user-avatar">
+                        <i class="icon-user"></i>
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name">Loading...</div>
+                        <div class="user-role">-</div>
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-sm btn-logout" id="logout-btn">
+                    <i class="icon-log-out"></i> Logout
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="page-header">
+                <div class="header-left">
+                    <h1>Dashboard</h1>
+                    <p class="text-muted">Welcome back! Here's your recruitment overview.</p>
+                </div>
+                <div class="header-right">
+                    <button class="btn btn-secondary" id="notifications-btn">
+                        <i class="icon-bell"></i>
+                        <span class="badge" id="notification-count">0</span>
+                    </button>
+                    <button class="btn btn-primary" id="quick-action-btn">
+                        <i class="icon-plus"></i> Quick Action
+                    </button>
+                </div>
+            </header>
+
+            <!-- Dashboard Content -->
+            <div class="dashboard-container">
+                <!-- Stats Cards -->
+                <div class="stats-grid" id="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #3b82f6;">
+                            <i class="icon-file-text"></i>
+                        </div>
+                        <div class="stat-details">
+                            <div class="stat-label">Active Requirements</div>
+                            <div class="stat-value" id="stat-requirements">-</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #8b5cf6;">
+                            <i class="icon-users"></i>
+                        </div>
+                        <div class="stat-details">
+                            <div class="stat-label">Total Candidates</div>
+                            <div class="stat-value" id="stat-candidates">-</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #ec4899;">
+                            <i class="icon-calendar"></i>
+                        </div>
+                        <div class="stat-details">
+                            <div class="stat-label">Scheduled Interviews</div>
+                            <div class="stat-value" id="stat-interviews">-</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #10b981;">
+                            <i class="icon-user-check"></i>
+                        </div>
+                        <div class="stat-details">
+                            <div class="stat-label">Selected Candidates</div>
+                            <div class="stat-value" id="stat-selected">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="dashboard-row">
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <h2>Recent Activity</h2>
+                            <button class="btn btn-sm btn-secondary" id="refresh-activity">
+                                <i class="icon-refresh-cw"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="recent-activity" class="activity-list">
+                                <div class="loading">Loading activity...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <h2>Pending Actions</h2>
+                            <button class="btn btn-sm btn-secondary" id="refresh-pending">
+                                <i class="icon-refresh-cw"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="pending-actions" class="pending-list">
+                                <div class="loading">Loading pending actions...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="dashboard-row">
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <h2>Recruitment Pipeline</h2>
+                            <select id="pipeline-filter" class="form-control form-control-sm">
+                                <option value="this_month">This Month</option>
+                                <option value="last_month">Last Month</option>
+                                <option value="this_quarter">This Quarter</option>
+                            </select>
+                        </div>
+                        <div class="card-body">
+                            <div id="pipeline-chart" class="chart-container">
+                                <div class="loading">Loading chart...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <h2>Top Requirements</h2>
+                            <a href="requirements.html" class="btn btn-sm btn-link">View All</a>
+                        </div>
+                        <div class="card-body">
+                            <div id="top-requirements" class="requirements-list">
+                                <div class="loading">Loading requirements...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upcoming Interviews -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2>Upcoming Interviews</h2>
+                        <a href="interviews.html" class="btn btn-sm btn-link">View All</a>
+                    </div>
+                    <div class="card-body">
+                        <div id="upcoming-interviews">
+                            <div class="loading">Loading interviews...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Panel -->
+    <div class="notification-panel" id="notification-panel">
+        <div class="notification-header">
+            <h3>Notifications</h3>
+            <button class="btn btn-sm btn-link" id="mark-all-read">Mark all as read</button>
+        </div>
+        <div class="notification-list" id="notification-list">
+            <div class="loading">Loading notifications...</div>
+        </div>
+    </div>
+
+    <!-- Quick Action Modal -->
+    <div class="modal" id="quick-action-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Quick Actions</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" data-action="raise-requirement">
+                        <i class="icon-file-plus"></i>
+                        <span>Raise Requirement</span>
+                    </button>
+                    <button class="quick-action-btn" data-action="add-candidate">
+                        <i class="icon-user-plus"></i>
+                        <span>Add Candidate</span>
+                    </button>
+                    <button class="quick-action-btn" data-action="schedule-interview">
+                        <i class="icon-calendar-plus"></i>
+                        <span>Schedule Interview</span>
+                    </button>
+                    <button class="quick-action-btn" data-action="view-reports">
+                        <i class="icon-bar-chart"></i>
+                        <span>View Reports</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loader -->
+    <div class="loader-overlay" id="loader-overlay">
+        <div class="spinner"></div>
+        <p id="loader-text">Loading...</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/ui-router.js"></script>
+    <script src="js/modules/dashboard.js"></script>
+
+    <script>
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check authentication
+            if (!Auth.isAuthenticated()) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            try {
+                // Load user data
+                await Auth.loadUserData();
+                
+                // Initialize UI
+                UIRouter.init();
+                
+                // Initialize dashboard module
+                await DashboardModule.init();
+
+                // Setup global event listeners
+                setupGlobalListeners();
+            } catch (error) {
+                console.error('Dashboard initialization error:', error);
+                Utils.showToast('Failed to load dashboard', 'error');
+            }
+        });
+
+        function setupGlobalListeners() {
+            // Sidebar toggle
+            document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+                document.getElementById('sidebar').classList.toggle('collapsed');
+            });
+
+            // Logout
+            document.getElementById('logout-btn')?.addEventListener('click', async () => {
+                const confirmed = await Utils.confirm('Logout', 'Are you sure you want to logout?');
+                if (confirmed) {
+                    Auth.logout();
+                    window.location.href = 'index.html';
+                }
+            });
+
+            // Notifications
+            document.getElementById('notifications-btn')?.addEventListener('click', () => {
+                document.getElementById('notification-panel').classList.toggle('open');
+            });
+
+            // Quick actions
+            document.getElementById('quick-action-btn')?.addEventListener('click', () => {
+                document.getElementById('quick-action-modal').classList.add('show');
+            });
+
+            // Quick action buttons
+            document.querySelectorAll('.quick-action-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const action = e.currentTarget.dataset.action;
+                    handleQuickAction(action);
+                });
+            });
+        }
+
+        function handleQuickAction(action) {
+            document.getElementById('quick-action-modal').classList.remove('show');
+            
+            switch(action) {
+                case 'raise-requirement':
+                    window.location.href = 'requirements.html?action=new';
+                    break;
+                case 'add-candidate':
+                    window.location.href = 'candidates.html?action=add';
+                    break;
+                case 'schedule-interview':
+                    window.location.href = 'interviews.html?action=schedule';
+                    break;
+                case 'view-reports':
+                    window.location.href = 'reports.html';
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>
