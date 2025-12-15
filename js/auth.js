@@ -44,7 +44,8 @@ const Auth = (() => {
             client_id: CONFIG.AUTH.CLIENT_ID,
             callback: handleGoogleCallback,
             auto_select: false,
-            cancel_on_tap_outside: true
+            cancel_on_tap_outside: true,
+            use_fedcm_for_prompt: true
         });
 
         isInitialized = true;
@@ -116,11 +117,12 @@ const Auth = (() => {
     const showOneTap = () => {
         if (isInitialized) {
             google.accounts.id.prompt((notification) => {
-                if (notification.isNotDisplayed()) {
-                    console.log('One Tap not displayed:', notification.getNotDisplayedReason());
-                }
-                if (notification.isSkippedMoment()) {
-                    console.log('One Tap skipped:', notification.getSkippedReason());
+                // FedCM-compatible: use getDismissedReason() instead of deprecated methods
+                if (notification.getDismissedReason) {
+                    const reason = notification.getDismissedReason();
+                    if (reason) {
+                        console.log('One Tap dismissed:', reason);
+                    }
                 }
             });
         }
@@ -363,10 +365,14 @@ const Auth = (() => {
         }
         
         return new Promise((resolve, reject) => {
-            // Trigger Google Sign-In
+            // Trigger Google Sign-In with FedCM-compatible handling
             google.accounts.id.prompt((notification) => {
-                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                    reject(new Error('Google Sign-In was cancelled or not displayed'));
+                // FedCM-compatible: use getDismissedReason() instead of deprecated methods
+                if (notification.getDismissedReason) {
+                    const reason = notification.getDismissedReason();
+                    if (reason) {
+                        reject(new Error(`Google Sign-In was dismissed: ${reason}`));
+                    }
                 }
             });
             
