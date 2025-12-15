@@ -1,448 +1,429 @@
 /**
  * ============================================
- * HRMS/ATS SYSTEM - AUTH MODULE
- * Google OAuth & Session Management
+ * HRMS/ATS SYSTEM - API MODULE
+ * HTTP Client for Backend Communication
  * ============================================
  */
 
-const Auth = (() => {
-    // Private state
-    let currentUser = null;
-    let isInitialized = false;
-    let googleAuth = null;
-
+const API = (() => {
     /**
-     * Initialize Google OAuth
+     * Core request function to communicate with Google Apps Script backend
      */
-    const initGoogleAuth = () => {
-        return new Promise((resolve, reject) => {
-            // Load Google Identity Services
-            if (typeof google === 'undefined') {
-                // Load script dynamically if not loaded
-                const script = document.createElement('script');
-                script.src = 'https://accounts.google.com/gsi/client';
-                script.async = true;
-                script.defer = true;
-                script.onload = () => {
-                    setupGoogleAuth();
-                    resolve();
-                };
-                script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
-                document.head.appendChild(script);
-            } else {
-                setupGoogleAuth();
-                resolve();
-            }
-        });
-    };
+    const request = async (action, data = {}) => {
+        const token = localStorage.getItem(CONFIG.AUTH.TOKEN_KEY);
+        
+        const payload = {
+            action,
+            token,
+            data,
+            timestamp: new Date().toISOString()
+        };
 
-    /**
-     * Setup Google Auth configuration
-     */
-    const setupGoogleAuth = () => {
-        google.accounts.id.initialize({
-            client_id: CONFIG.AUTH.CLIENT_ID,
-            callback: handleGoogleCallback,
-            auto_select: false,
-            cancel_on_tap_outside: true
-        });
+        let lastError;
+        
+        for (let attempt = 1; attempt <= CONFIG.API.RETRY_ATTEMPTS; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), CONFIG.API.TIMEOUT);
 
-        isInitialized = true;
-    };
+                const response = await fetch(CONFIG.API.BASE_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8'
+                    },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
 
-    /**
-     * Handle Google OAuth callback
-     */
-    const handleGoogleCallback = async (response) => {
-        try {
-            Utils.showLoader('Authenticating...');
-            
-            // Send token to backend for verification
-            const result = await API.auth.login(response.credential);
-            
-            if (result.success) {
-                // Store session data
-                localStorage.setItem(CONFIG.AUTH.TOKEN_KEY, result.token);
-                localStorage.setItem(CONFIG.AUTH.SESSION_KEY, JSON.stringify({
-                    user: result.user,
-                    expiresAt: Date.now() + CONFIG.AUTH.SESSION_DURATION
-                }));
-                
-                currentUser = result.user;
-                
-                // Update state
-                State.setUser(result.user);
-                
-                // Redirect to dashboard
-                Utils.toast('Login successful! Welcome back.', 'success');
-                Router.navigate('dashboard');
-            } else {
-                Utils.toast(result.error || 'Login failed. Please try again.', 'error');
-            }
-        } catch (error) {
-            console.error('Auth error:', error);
-            Utils.toast('Authentication failed. Please try again.', 'error');
-        } finally {
-            Utils.hideLoader();
-        }
-    };
+                clearTimeout(timeoutId);
 
-    /**
-     * Render Google Sign-In button
-     */
-    const renderGoogleButton = (containerId) => {
-        if (!isInitialized) {
-            console.error('Google Auth not initialized');
-            return;
-        }
-
-        google.accounts.id.renderButton(
-            document.getElementById(containerId),
-            {
-                theme: 'outline',
-                size: 'large',
-                type: 'standard',
-                text: 'signin_with',
-                shape: 'rectangular',
-                logo_alignment: 'left',
-                width: 280
-            }
-        );
-    };
-
-    /**
-     * Show Google One Tap prompt
-     */
-    const showOneTap = () => {
-        if (isInitialized) {
-            google.accounts.id.prompt((notification) => {
-                if (notification.isNotDisplayed()) {
-                    console.log('One Tap not displayed:', notification.getNotDisplayedReason());
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                if (notification.isSkippedMoment()) {
-                    console.log('One Tap skipped:', notification.getSkippedReason());
+
+                const result = await response.json();
+
+                // Handle auth errors
+                if (result.code === 'AUTH_ERROR') {
+                    Auth.handleAuthError();
+                    throw new Error(result.error || 'Authentication failed');
                 }
-            });
-        }
-    };
 
-    /**
-     * Check if user is authenticated
-     */
-    const isAuthenticated = () => {
-        const session = getSession();
-        return session !== null && session.expiresAt > Date.now();
-    };
+                return result;
 
-    /**
-     * Get current session
-     */
-    const getSession = () => {
-        try {
-            const sessionData = localStorage.getItem(CONFIG.AUTH.SESSION_KEY);
-            if (!sessionData) return null;
-            
-            const session = JSON.parse(sessionData);
-            
-            // Check expiration
-            if (session.expiresAt && session.expiresAt > Date.now()) {
-                return session;
-            }
-            
-            // Session expired, clear it
-            clearSession();
-            return null;
-        } catch (error) {
-            console.error('Error parsing session:', error);
-            clearSession();
-            return null;
-        }
-    };
-
-    /**
-     * Get current user
-     */
-    const getCurrentUser = () => {
-        if (currentUser) return currentUser;
-        
-        const session = getSession();
-        if (session && session.user) {
-            currentUser = session.user;
-            return currentUser;
-        }
-        
-        return null;
-    };
-
-    /**
-     * Get user role
-     */
-    const getUserRole = () => {
-        const user = getCurrentUser();
-        return user ? user.role : null;
-    };
-
-    /**
-     * Check if user has permission
-     */
-    const hasPermission = (permission) => {
-        const user = getCurrentUser();
-        if (!user || !user.permissions) return false;
-        return user.permissions.includes(permission);
-    };
-
-    /**
-     * Check if user has any of the given permissions
-     */
-    const hasAnyPermission = (permissions) => {
-        return permissions.some(p => hasPermission(p));
-    };
-
-    /**
-     * Check if user has all of the given permissions
-     */
-    const hasAllPermissions = (permissions) => {
-        return permissions.every(p => hasPermission(p));
-    };
-
-    /**
-     * Check if user has role
-     */
-    const hasRole = (role) => {
-        const userRole = getUserRole();
-        return userRole === role;
-    };
-
-    /**
-     * Check if user has any of the given roles
-     */
-    const hasAnyRole = (roles) => {
-        const userRole = getUserRole();
-        return roles.includes(userRole);
-    };
-
-    /**
-     * Validate token with backend
-     */
-    const validateToken = async () => {
-        if (!isAuthenticated()) return false;
-        
-        try {
-            const result = await API.auth.validateToken();
-            
-            if (!result.success) {
-                clearSession();
-                return false;
-            }
-            
-            // Update user data if changed
-            if (result.user) {
-                currentUser = result.user;
-                updateSession({ user: result.user });
-                State.setUser(result.user);
-            }
-            
-            return true;
-        } catch (error) {
-            console.error('Token validation error:', error);
-            return false;
-        }
-    };
-
-    /**
-     * Update session data
-     */
-    const updateSession = (updates) => {
-        const session = getSession();
-        if (session) {
-            const updated = { ...session, ...updates };
-            localStorage.setItem(CONFIG.AUTH.SESSION_KEY, JSON.stringify(updated));
-        }
-    };
-
-    /**
-     * Refresh session
-     */
-    const refreshSession = () => {
-        const session = getSession();
-        if (session) {
-            session.expiresAt = Date.now() + CONFIG.AUTH.SESSION_DURATION;
-            localStorage.setItem(CONFIG.AUTH.SESSION_KEY, JSON.stringify(session));
-        }
-    };
-
-    /**
-     * Clear session
-     */
-    const clearSession = () => {
-        localStorage.removeItem(CONFIG.AUTH.TOKEN_KEY);
-        localStorage.removeItem(CONFIG.AUTH.SESSION_KEY);
-        currentUser = null;
-    };
-
-    /**
-     * Logout
-     */
-    const logout = async () => {
-        try {
-            Utils.showLoader('Logging out...');
-            
-            // Notify backend
-            await API.auth.logout();
-            
-            // Clear local session
-            clearSession();
-            
-            // Clear state
-            State.clear();
-            
-            // Revoke Google session
-            if (isInitialized) {
-                google.accounts.id.disableAutoSelect();
-            }
-            
-            Utils.toast('Logged out successfully', 'success');
-            
-            // Redirect to login
-            Router.navigate('login');
-        } catch (error) {
-            console.error('Logout error:', error);
-            // Force logout even if API fails
-            clearSession();
-            State.clear();
-            Router.navigate('login');
-        } finally {
-            Utils.hideLoader();
-        }
-    };
-
-    /**
-     * Handle authentication errors from API
-     */
-    const handleAuthError = (response) => {
-        if (response.code === 'TOKEN_EXPIRED' || response.code === 'AUTH_ERROR') {
-            Utils.toast('Your session has expired. Please login again.', 'warning');
-            clearSession();
-            Router.navigate('login');
-        }
-    };
-
-    /**
-     * Guard route - check if user can access
-     */
-    const guardRoute = (requiredPermissions = [], requiredRoles = []) => {
-        // Check authentication
-        if (!isAuthenticated()) {
-            Router.navigate('login');
-            return false;
-        }
-        
-        // Check roles if specified
-        if (requiredRoles.length > 0 && !hasAnyRole(requiredRoles)) {
-            Utils.toast('You do not have access to this page.', 'error');
-            Router.navigate('dashboard');
-            return false;
-        }
-        
-        // Check permissions if specified
-        if (requiredPermissions.length > 0 && !hasAnyPermission(requiredPermissions)) {
-            Utils.toast('You do not have permission to access this page.', 'error');
-            Router.navigate('dashboard');
-            return false;
-        }
-        
-        return true;
-    };
-
-    /**
-     * Login with Google OAuth
-     */
-    const login = async () => {
-        if (!isInitialized) {
-            await initGoogleAuth();
-        }
-        
-        return new Promise((resolve, reject) => {
-            // Trigger Google Sign-In
-            google.accounts.id.prompt((notification) => {
-                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                    reject(new Error('Google Sign-In was cancelled or not displayed'));
-                }
-            });
-            
-            // The actual authentication will be handled by handleGoogleCallback
-            // which gets triggered automatically when user signs in
-        });
-    };
-
-    /**
-     * Handle OAuth redirect (for compatibility)
-     */
-    const handleOAuthRedirect = async () => {
-        // Check URL parameters for OAuth response
-        const params = new URLSearchParams(window.location.search);
-        
-        if (params.has('code') || params.has('error')) {
-            // Handle OAuth code/error if present
-            if (params.has('error')) {
-                throw new Error(params.get('error_description') || 'OAuth error');
-            }
-            
-            // Clear URL parameters
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-        
-        return Promise.resolve();
-    };
-
-    /**
-     * Initialize auth module
-     */
-    const init = async () => {
-        try {
-            await initGoogleAuth();
-            
-            // Check for existing session
-            if (isAuthenticated()) {
-                const session = getSession();
-                currentUser = session.user;
-                State.setUser(currentUser);
+            } catch (error) {
+                lastError = error;
                 
-                // Validate token in background
-                validateToken();
+                if (error.name === 'AbortError') {
+                    console.warn(`Request timeout (attempt ${attempt}/${CONFIG.API.RETRY_ATTEMPTS})`);
+                } else {
+                    console.warn(`Request failed (attempt ${attempt}/${CONFIG.API.RETRY_ATTEMPTS}):`, error.message);
+                }
+
+                if (attempt < CONFIG.API.RETRY_ATTEMPTS) {
+                    await new Promise(resolve => setTimeout(resolve, CONFIG.API.RETRY_DELAY * attempt));
+                }
             }
-            
-            return true;
-        } catch (error) {
-            console.error('Auth initialization error:', error);
-            return false;
+        }
+
+        throw lastError;
+    };
+
+    // ==================== AUTH API ====================
+    const auth = {
+        login: async (credential) => {
+            return request('AUTH_LOGIN', { credential });
+        },
+
+        validate: async () => {
+            return request('AUTH_VALIDATE');
+        },
+
+        logout: async () => {
+            return request('AUTH_LOGOUT');
+        },
+
+        getUserPermissions: async () => {
+            return request('GET_USER_PERMISSIONS');
+        },
+
+        getUserData: async () => {
+            return request('GET_USER_DATA');
+        },
+
+        refreshToken: async () => {
+            return request('REFRESH_TOKEN');
+        }
+    };
+
+    // ==================== DASHBOARD API ====================
+    const dashboard = {
+        getStats: async () => {
+            return request('GET_DASHBOARD_STATS');
+        },
+
+        getRecentActivity: async (limit = 10) => {
+            return request('GET_RECENT_ACTIVITY', { limit });
+        },
+
+        getPendingActions: async () => {
+            return request('GET_PENDING_ACTIONS');
+        }
+    };
+
+    // ==================== REQUIREMENTS API ====================
+    const requirements = {
+        getAll: async (filters = {}) => {
+            return request('GET_REQUIREMENTS', filters);
+        },
+
+        getById: async (id) => {
+            return request('GET_REQUIREMENT_DETAIL', { id });
+        },
+
+        create: async (data) => {
+            return request('RAISE_REQUIREMENT', data);
+        },
+
+        update: async (id, data) => {
+            return request('UPDATE_REQUIREMENT', { id, ...data });
+        },
+
+        approve: async (id) => {
+            return request('APPROVE_REQUIREMENT', { id });
+        },
+
+        sendBack: async (id, remark) => {
+            return request('SEND_BACK_REQUIREMENT', { id, remark });
+        }
+    };
+
+    // ==================== TEMPLATES API ====================
+    const templates = {
+        getAll: async () => {
+            return request('GET_JOB_TEMPLATES');
+        },
+
+        getById: async (id) => {
+            return request('GET_JOB_TEMPLATE', { id });
+        },
+
+        create: async (data) => {
+            return request('CREATE_JOB_TEMPLATE', data);
+        },
+
+        update: async (id, data) => {
+            return request('UPDATE_JOB_TEMPLATE', { id, ...data });
+        }
+    };
+
+    // ==================== JOB POSTINGS API ====================
+    const jobPostings = {
+        getAll: async (filters = {}) => {
+            return request('GET_JOB_POSTINGS', filters);
+        },
+
+        create: async (data) => {
+            return request('CREATE_JOB_POSTING', data);
+        },
+
+        update: async (id, data) => {
+            return request('UPDATE_JOB_POSTING', { id, ...data });
+        }
+    };
+
+    // ==================== CANDIDATES API ====================
+    const candidates = {
+        getAll: async (filters = {}) => {
+            return request('GET_CANDIDATES', filters);
+        },
+
+        getById: async (id) => {
+            return request('GET_CANDIDATE_DETAIL', { id });
+        },
+
+        add: async (data) => {
+            return request('ADD_CANDIDATE', data);
+        },
+
+        update: async (id, data) => {
+            return request('UPDATE_CANDIDATE', { id, ...data });
+        },
+
+        bulkAdd: async (candidates) => {
+            return request('BULK_UPLOAD_CANDIDATES', { candidates });
+        },
+
+        shortlist: async (candidateId, approved, reason = '') => {
+            return request('SHORTLIST_DECISION', { candidateId, approved, reason });
+        },
+
+        getHistory: async (id) => {
+            return request('GET_CANDIDATE_HISTORY', { candidateId: id });
+        }
+    };
+
+    // ==================== CALL SCREENING API ====================
+    const calls = {
+        getQueue: async (filters = {}) => {
+            return request('GET_CALL_QUEUE', filters);
+        },
+
+        submitScreening: async (data) => {
+            return request('CALL_SCREENING', data);
+        },
+
+        updateStatus: async (candidateId, status) => {
+            return request('UPDATE_CALL_STATUS', { candidateId, status });
+        }
+    };
+
+    // ==================== INTERVIEWS API ====================
+    const interviews = {
+        getAll: async (filters = {}) => {
+            return request('GET_INTERVIEWS', filters);
+        },
+
+        getScheduled: async () => {
+            return request('GET_INTERVIEWS', { status: 'SCHEDULED' });
+        },
+
+        schedule: async (data) => {
+            return request('SCHEDULE_INTERVIEW', data);
+        },
+
+        reschedule: async (id, data) => {
+            return request('UPDATE_INTERVIEW', { id, ...data });
+        },
+
+        updateStatus: async (id, status) => {
+            return request('UPDATE_INTERVIEW', { id, status });
+        },
+
+        markAttendance: async (id, appeared) => {
+            return request('MARK_ATTENDANCE', { id, appeared });
+        },
+
+        submitFeedback: async (data) => {
+            return request('PRE_INTERVIEW_FEEDBACK', data);
+        },
+
+        getFeedback: async (interviewId) => {
+            return request('GET_INTERVIEW_FEEDBACK', { interviewId });
+        }
+    };
+
+    // ==================== TESTS API ====================
+    const tests = {
+        getAll: async (filters = {}) => {
+            return request('GET_TESTS', filters);
+        },
+
+        getResults: async (filters = {}) => {
+            return request('GET_TEST_RESULTS', filters);
+        },
+
+        getDetails: async (testId) => {
+            return request('GET_TEST_DETAILS', { testId });
+        },
+
+        sendLink: async (data) => {
+            return request('SEND_TEST_LINK', data);
+        },
+
+        grade: async (data) => {
+            return request('GRADE_TEST', data);
+        },
+
+        getActiveLinks: async () => {
+            return request('GET_ACTIVE_TEST_LINKS');
+        },
+
+        revokeLink: async (linkId) => {
+            return request('REVOKE_TEST_LINK', { linkId });
+        }
+    };
+
+    // ==================== OWNER QUEUE API ====================
+    const owner = {
+        getQueue: async (filters = {}) => {
+            return request('GET_OWNER_QUEUE', filters);
+        },
+
+        submitDecision: async (data) => {
+            return request('OWNER_DECISION', data);
+        },
+
+        getFinalInterviewQueue: async (filters = {}) => {
+            return request('GET_FINAL_INTERVIEW_QUEUE', filters);
+        },
+
+        submitFinalDecision: async (data) => {
+            return request('FINAL_INTERVIEW_DECISION', data);
+        },
+
+        getCandidateJourney: async (candidateId) => {
+            return request('GET_CANDIDATE_JOURNEY', { candidateId });
+        },
+
+        getCandidateCV: async (candidateId) => {
+            return request('GET_CANDIDATE_CV', { candidateId });
+        },
+
+        getDashboardStats: async () => {
+            return request('GET_OWNER_DASHBOARD_STATS');
+        }
+    };
+
+    // ==================== ONBOARDING API ====================
+    const onboarding = {
+        getSelectedCandidates: async (filters = {}) => {
+            return request('GET_SELECTED_CANDIDATES', filters);
+        },
+
+        uploadDocuments: async (data) => {
+            return request('UPLOAD_DOCUMENTS', data);
+        },
+
+        getCandidateDocuments: async (candidateId) => {
+            return request('GET_CANDIDATE_DOCUMENTS', { candidateId });
+        },
+
+        verifyDocuments: async (data) => {
+            return request('VERIFY_DOCUMENTS', data);
+        },
+
+        setJoiningDate: async (data) => {
+            return request('SET_JOINING_DATE', data);
+        },
+
+        confirmJoining: async (candidateId) => {
+            return request('CONFIRM_JOINING', { candidateId });
+        },
+
+        postponeJoining: async (data) => {
+            return request('POSTPONE_JOINING', data);
+        },
+
+        downloadDocument: async (documentId) => {
+            return request('DOWNLOAD_DOCUMENT', { documentId });
+        },
+
+        viewDocument: async (documentId) => {
+            return request('VIEW_DOCUMENT', { documentId });
+        },
+
+        getProbationTracking: async (filters = {}) => {
+            return request('GET_PROBATION_TRACKING', filters);
+        },
+
+        confirmEmployee: async (employeeId) => {
+            return request('CONFIRM_EMPLOYEE', { employeeId });
+        }
+    };
+
+    // ==================== ADMIN API ====================
+    const admin = {
+        getQueue: async (filters = {}) => {
+            return request('GET_ADMIN_QUEUE', filters);
+        },
+
+        submitDecision: async (data) => {
+            return request('ADMIN_DECISION', data);
+        },
+
+        editMarks: async (data) => {
+            return request('ADMIN_EDIT_MARKS', data);
+        },
+
+        getRejectionLog: async (filters = {}) => {
+            return request('GET_REJECTION_LOG', filters);
+        },
+
+        revertRejection: async (id, reason) => {
+            return request('REVERT_REJECTION', { id, reason });
+        },
+
+        getAuditLog: async (filters = {}) => {
+            return request('GET_AUDIT_LOG', filters);
+        },
+
+        getSettings: async () => {
+            return request('GET_SETTINGS');
+        },
+
+        updateSettings: async (data) => {
+            return request('UPDATE_SETTINGS', data);
+        },
+
+        blacklistCandidate: async (data) => {
+            return request('BLACKLIST_CANDIDATE', data);
+        },
+
+        getBlacklist: async () => {
+            return request('GET_BLACKLIST');
         }
     };
 
     // Public interface
     return {
-        init,
-        login,
-        handleOAuthRedirect,
-        renderGoogleButton,
-        showOneTap,
-        isAuthenticated,
-        getCurrentUser,
-        getUserRole,
-        hasPermission,
-        hasAnyPermission,
-        hasAllPermissions,
-        hasRole,
-        hasAnyRole,
-        validateToken,
-        refreshSession,
-        logout,
-        handleAuthError,
-        guardRoute
+        request,
+        auth,
+        dashboard,
+        requirements,
+        templates,
+        jobPostings,
+        candidates,
+        calls,
+        interviews,
+        tests,
+        owner,
+        onboarding,
+        admin
     };
 })();
 
 // Export for module usage
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = Auth;
+    module.exports = API;
 }
