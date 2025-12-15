@@ -72,7 +72,7 @@ const API = (() => {
     // ==================== AUTH API ====================
     const auth = {
         login: async (credential) => {
-            return request('AUTH_LOGIN', { credential });
+            return request('AUTH_LOGIN', { token: credential });
         },
 
         validate: async () => {
