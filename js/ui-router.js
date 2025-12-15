@@ -412,6 +412,21 @@ const Router = (() => {
     };
 })();
 
+// Backward-compatible alias for pages/modules that use `UIRouter.*`
+// Note: top-level `const` is still globally accessible across non-module scripts.
+const UIRouter = {
+    init: (...args) => Router.init(...args),
+    navigate: (...args) => Router.navigate(...args),
+    back: (...args) => Router.back(...args),
+    forward: (...args) => Router.forward(...args),
+    getCurrentRoute: (...args) => Router.getCurrentRoute(...args),
+    getQueryParam: (...args) => Router.getQueryParam(...args),
+    setQueryParam: (...args) => Router.setQueryParam(...args),
+    navigateTo: (url) => {
+        window.location.href = url;
+    }
+};
+
 // Export for module usage
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Router;
