@@ -400,6 +400,16 @@ const State = (() => {
             state[key] = newState[key];
         });
         localStorage.removeItem('hrms_state');
+        sessionStorage.removeItem('hrms_state');
+        // Also clear any auth/session keys if they were stored in sessionStorage
+        try {
+            if (typeof CONFIG !== 'undefined' && CONFIG.AUTH) {
+                sessionStorage.removeItem(CONFIG.AUTH.TOKEN_KEY);
+                sessionStorage.removeItem(CONFIG.AUTH.SESSION_KEY);
+            }
+        } catch (e) {
+            // ignore
+        }
         notify('*', state);
     };
 

@@ -158,6 +158,144 @@ const Utils = (() => {
         document.body.style.overflow = '';
     };
 
+    /**
+     * Create and open a modal
+     */
+    const createModal = (options = {}) => {
+        const {
+            id = null,
+            title = '',
+            content = '',
+            size = 'md', // md | large | xl
+            buttons = [],
+            closeOnBackdrop = true
+        } = options;
+
+        const modalId = id || `modal-${generateId()}`;
+
+        // Remove existing modal with same id if any
+        document.getElementById(modalId)?.remove();
+
+        const backdrop = document.createElement('div');
+        backdrop.id = modalId;
+        backdrop.className = 'modal-backdrop active';
+
+        const modal = document.createElement('div');
+        const sizeClass = size === 'xl' ? 'modal-xl' : (size === 'large' ? 'modal-lg' : '');
+        modal.className = `modal ${sizeClass}`.trim();
+
+        const header = document.createElement('div');
+        header.className = 'modal-header';
+        header.innerHTML = `
+            <h3>${escapeHtml(title)}</h3>
+            <button class="modal-close" type="button" aria-label="Close">×</button>
+        `;
+
+        const body = document.createElement('div');
+        body.className = 'modal-body';
+        body.innerHTML = content;
+
+        const footer = document.createElement('div');
+        footer.className = 'modal-footer';
+
+        modal.appendChild(header);
+        modal.appendChild(body);
+        if (buttons && buttons.length > 0) {
+            modal.appendChild(footer);
+        }
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+        document.body.style.overflow = 'hidden';
+
+        const api = {
+            id: modalId,
+            element: backdrop,
+            modal,
+            open: () => {
+                backdrop.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            },
+            close: () => {
+                backdrop.classList.remove('active');
+                document.body.style.overflow = '';
+                setTimeout(() => backdrop.remove(), CONFIG.UI.ANIMATION_DURATION);
+            }
+        };
+
+        // Close button
+        header.querySelector('.modal-close')?.addEventListener('click', () => api.close());
+
+        // Backdrop click to close
+        if (closeOnBackdrop) {
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop) api.close();
+            });
+        }
+
+        // Buttons
+        buttons.forEach((btn) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+
+            const providedClass = btn.class || 'btn btn-primary';
+            button.className = providedClass.includes('btn') ? providedClass : `btn ${providedClass}`;
+            button.textContent = btn.text || 'OK';
+
+            button.addEventListener('click', async () => {
+                if (typeof btn.onClick === 'function') {
+                    await btn.onClick(api);
+                }
+            });
+
+            footer.appendChild(button);
+        });
+
+        // Escape key to close
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                api.close();
+                document.removeEventListener('keydown', onKeyDown);
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+
+        return api;
+    };
+
+    /**
+     * Confirmation dialog (Promise-based)
+     */
+    const confirm = (titleOrMessage, message = null) => {
+        const title = message == null ? 'Confirm' : String(titleOrMessage ?? 'Confirm');
+        const bodyMessage = message == null ? String(titleOrMessage ?? '') : String(message ?? '');
+
+        return new Promise((resolve) => {
+            createModal({
+                title,
+                content: `<p>${escapeHtml(bodyMessage)}</p>`,
+                closeOnBackdrop: false,
+                buttons: [
+                    {
+                        text: 'Cancel',
+                        class: 'btn btn-secondary',
+                        onClick: (m) => {
+                            m.close();
+                            resolve(false);
+                        }
+                    },
+                    {
+                        text: 'OK',
+                        class: 'btn btn-primary',
+                        onClick: (m) => {
+                            m.close();
+                            resolve(true);
+                        }
+                    }
+                ]
+            });
+        });
+    };
+
     // ==========================================
     // FORM UTILITIES
     // ==========================================
@@ -287,8 +425,12 @@ const Utils = (() => {
         
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const fullMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const weekdaysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         
         const replacements = {
+            'dddd': weekdays[d.getDay()],
+            'ddd': weekdaysShort[d.getDay()],
             'YYYY': d.getFullYear(),
             'YY': String(d.getFullYear()).slice(-2),
             'MMMM': fullMonths[d.getMonth()],
@@ -303,7 +445,7 @@ const Utils = (() => {
         
         let result = format;
         Object.keys(replacements).forEach(key => {
-            result = result.replace(key, replacements[key]);
+            result = result.split(key).join(replacements[key]);
         });
         
         return result;
@@ -346,6 +488,20 @@ const Utils = (() => {
                d.getFullYear() === today.getFullYear();
     };
 
+    /**
+     * Days between two dates (signed, whole days)
+     */
+    const daysBetween = (date1, date2) => {
+        const d1 = new Date(date1);
+        const d2 = new Date(date2);
+        if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 0;
+
+        const utc1 = Date.UTC(d1.getFullYear(), d1.getMonth(), d1.getDate());
+        const utc2 = Date.UTC(d2.getFullYear(), d2.getMonth(), d2.getDate());
+        const msPerDay = 24 * 60 * 60 * 1000;
+        return Math.floor((utc2 - utc1) / msPerDay);
+    };
+
     // ==========================================
     // STRING UTILITIES
     // ==========================================
@@ -364,6 +520,19 @@ const Utils = (() => {
     const titleCase = (str) => {
         if (!str) return '';
         return str.toLowerCase().split(' ').map(word => capitalize(word)).join(' ');
+    };
+
+    /**
+     * Escape HTML to prevent XSS when rendering user data
+     */
+    const escapeHtml = (str) => {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     };
 
     /**
@@ -645,6 +814,8 @@ const Utils = (() => {
         openModal,
         closeModal,
         closeAllModals,
+        createModal,
+        confirm,
         getFormData,
         setFormData,
         resetForm,
@@ -652,8 +823,10 @@ const Utils = (() => {
         formatDate,
         timeAgo,
         isToday,
+        daysBetween,
         capitalize,
         titleCase,
+        escapeHtml,
         truncate,
         generateId,
         slugify,

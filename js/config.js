@@ -254,6 +254,31 @@ const CONFIG = {
         ANIMATION_DURATION: 300
     },
 
+    // Onboarding - Required Documents
+    REQUIRED_DOCUMENTS: [
+        { key: 'PHOTO', name: 'Passport Photo' },
+        { key: 'AADHAR', name: 'Aadhaar Card' },
+        { key: 'PAN', name: 'PAN Card' },
+        { key: 'ADDRESS_PROOF', name: 'Address Proof' },
+        { key: 'EDUCATION', name: 'Education Certificates' },
+        { key: 'EXPERIENCE', name: 'Experience Letters' },
+        { key: 'BANK', name: 'Bank Details / Cheque' }
+    ],
+
+    // Tests - Role based test types
+    // Note: candidate.jobRole is used as key; fallback to ['GENERAL'] in code.
+    TEST_TYPES: {
+        ACCOUNTS: ['TALLY', 'EXCEL'],
+        FINANCE: ['EXCEL', 'APTITUDE'],
+        SALES: ['VOICE', 'EXCEL'],
+        CRM: ['EXCEL', 'VOICE'],
+        HR: ['EXCEL', 'GENERAL'],
+        ADMIN: ['EXCEL', 'GENERAL'],
+        IT: ['CODING', 'APTITUDE'],
+        SUPPORT: ['VOICE', 'TYPING'],
+        DEFAULT: ['GENERAL']
+    },
+
     // Feature Flags
     FEATURES: {
         BULK_UPLOAD: true,
@@ -272,6 +297,8 @@ Object.freeze(CONFIG.ROLES);
 Object.freeze(CONFIG.PERMISSIONS);
 Object.freeze(CONFIG.CANDIDATE_STATUS);
 Object.freeze(CONFIG.REQUIREMENT_STATUS);
+Object.freeze(CONFIG.REQUIRED_DOCUMENTS);
+Object.freeze(CONFIG.TEST_TYPES);
 
 // Export for module usage
 if (typeof module !== 'undefined' && module.exports) {
