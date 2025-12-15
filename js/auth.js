@@ -225,6 +225,33 @@ const Auth = (() => {
     };
 
     /**
+     * Load user data from session or API
+     */
+    const loadUserData = async () => {
+        // First try to get from current session
+        const user = getCurrentUser();
+        if (user) {
+            State.setUser(user);
+            return user;
+        }
+        
+        // If not in session, try to fetch from API
+        try {
+            const result = await API.auth.getUserData();
+            if (result.success && result.user) {
+                currentUser = result.user;
+                updateSession({ user: result.user });
+                State.setUser(result.user);
+                return result.user;
+            }
+        } catch (error) {
+            console.error('Failed to load user data:', error);
+        }
+        
+        return null;
+    };
+
+    /**
      * Validate token with backend
      */
     const validateToken = async () => {
@@ -443,6 +470,7 @@ const Auth = (() => {
         isAuthenticated,
         getCurrentUser,
         getUserRole,
+        loadUserData,
         hasPermission,
         hasAnyPermission,
         hasAllPermissions,
