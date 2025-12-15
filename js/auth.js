@@ -117,12 +117,13 @@ const Auth = (() => {
     const showOneTap = () => {
         if (isInitialized) {
             google.accounts.id.prompt((notification) => {
-                // FedCM-compatible: use getDismissedReason() instead of deprecated methods
-                if (notification.getDismissedReason) {
-                    const reason = notification.getDismissedReason();
-                    if (reason) {
-                        console.log('One Tap dismissed:', reason);
-                    }
+                // FedCM-compatible prompt handling
+                const momentType = notification.getMomentType?.();
+                const dismissedReason = notification.getDismissedReason?.();
+                
+                // Only log actual dismissals (not credential_returned which is success)
+                if (momentType === 'dismissed' && dismissedReason && dismissedReason !== 'credential_returned') {
+                    console.log('One Tap dismissed:', dismissedReason);
                 }
             });
         }
@@ -367,12 +368,19 @@ const Auth = (() => {
         return new Promise((resolve, reject) => {
             // Trigger Google Sign-In with FedCM-compatible handling
             google.accounts.id.prompt((notification) => {
-                // FedCM-compatible: use getDismissedReason() instead of deprecated methods
-                if (notification.getDismissedReason) {
-                    const reason = notification.getDismissedReason();
-                    if (reason) {
-                        reject(new Error(`Google Sign-In was dismissed: ${reason}`));
-                    }
+                // FedCM-compatible: check getMomentType() and getDismissedReason()
+                const momentType = notification.getMomentType?.();
+                const dismissedReason = notification.getDismissedReason?.();
+                
+                // credential_returned means success - callback will handle it
+                if (dismissedReason === 'credential_returned') {
+                    resolve();
+                    return;
+                }
+                
+                // Handle actual dismissals/cancellations
+                if (momentType === 'dismissed' && dismissedReason) {
+                    reject(new Error(`Google Sign-In was cancelled: ${dismissedReason}`));
                 }
             });
             
