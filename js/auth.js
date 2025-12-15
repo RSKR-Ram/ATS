@@ -11,6 +11,26 @@ const Auth = (() => {
     let isInitialized = false;
     let googleAuth = null;
 
+    const navigateApp = (route) => {
+        if (typeof Router !== 'undefined' && Router && typeof Router.navigate === 'function') {
+            Router.navigate(route);
+            return;
+        }
+
+        // Fallback for non-SPA pages (e.g., index.html, dashboard.html)
+        if (route === 'dashboard') {
+            window.location.href = 'dashboard.html';
+            return;
+        }
+        if (route === 'login') {
+            window.location.href = 'index.html';
+            return;
+        }
+
+        // Generic fallback
+        window.location.href = `${route}.html`;
+    };
+
     /**
      * Initialize Google OAuth
      */
@@ -76,7 +96,7 @@ const Auth = (() => {
                 
                 // Redirect to dashboard
                 Utils.toast('Login successful! Welcome back.', 'success');
-                Router.navigate('dashboard');
+                navigateApp('dashboard');
             } else {
                 Utils.toast(result.error || 'Login failed. Please try again.', 'error');
             }
@@ -334,13 +354,13 @@ const Auth = (() => {
             Utils.toast('Logged out successfully', 'success');
             
             // Redirect to login
-            Router.navigate('login');
+            navigateApp('login');
         } catch (error) {
             console.error('Logout error:', error);
             // Force logout even if API fails
             clearSession();
             State.clear();
-            Router.navigate('login');
+            navigateApp('login');
         } finally {
             Utils.hideLoader();
         }
@@ -354,7 +374,7 @@ const Auth = (() => {
         if (code === 'TOKEN_EXPIRED' || code === 'AUTH_ERROR') {
             Utils.toast('Your session has expired. Please login again.', 'warning');
             clearSession();
-            Router.navigate('login');
+            navigateApp('login');
         }
     };
 
@@ -364,21 +384,21 @@ const Auth = (() => {
     const guardRoute = (requiredPermissions = [], requiredRoles = []) => {
         // Check authentication
         if (!isAuthenticated()) {
-            Router.navigate('login');
+            navigateApp('login');
             return false;
         }
         
         // Check roles if specified
         if (requiredRoles.length > 0 && !hasAnyRole(requiredRoles)) {
             Utils.toast('You do not have access to this page.', 'error');
-            Router.navigate('dashboard');
+            navigateApp('dashboard');
             return false;
         }
         
         // Check permissions if specified
         if (requiredPermissions.length > 0 && !hasAnyPermission(requiredPermissions)) {
             Utils.toast('You do not have permission to access this page.', 'error');
-            Router.navigate('dashboard');
+            navigateApp('dashboard');
             return false;
         }
         
